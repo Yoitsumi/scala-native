@@ -1,7 +1,7 @@
 package demo
 
 import scalanative.native._
-import scalanative.libc.stdlib._
+import scalanative.libc._, stdlib._, stdio._
 import java.lang.Math.{PI, sin, cos, abs, pow, sqrt}
 
 @struct
