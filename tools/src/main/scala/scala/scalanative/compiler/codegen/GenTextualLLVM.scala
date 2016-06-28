@@ -74,15 +74,12 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
                        name: Global,
                        sig: Type,
                        blocks: Seq[Block]) = {
-    val Type.Function(argtys, retty) = sig
+    val Type.Function(argtys, retty) = abi.coerceFunctionType(sig)
 
     val isDecl  = blocks.isEmpty
     val keyword = if (isDecl) "declare" else "define"
-    val coercedArgTypes =
-      if(attrs.isExtern) abi.coerceArguments(argtys)
-      else argtys
     val params =
-      if (isDecl) r(coercedArgTypes, sep = ", ")
+      if (isDecl) r(argtys, sep = ", ")
       else r(blocks.head.params: Seq[Val], sep = ", ")
     val postattrs: Seq[Attr] =
       if (attrs.inline != Attr.MayInline) Seq(attrs.inline) else Seq()
@@ -214,24 +211,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
       op match {
         case op: Op.Call =>
           abi.coerceCall(inst).foreach(buf += _)
-//          val bind = if (isVoid(op.resty)) s() else sh"%$name = "
-//
-//          val (prefix, call) = abi.coerceCall(op)
-//          for(inst <- prefix) {
-//            buf += sh"%${inst.name} = ${inst.op}"
-//          }
-//          call match {
-//            case Op.Call(ty, Val.Global(pointee, _), args) =>
-//              buf += sh"${bind}call $ty @$pointee(${r(args, sep = ", ")})"
-//
-//            case Op.Call(ty, ptr, args) =>
-//              val pointee = fresh()
-//              val bind    = if (isVoid(op.resty)) s() else sh"%$name = "
-//
-//              buf += sh"%$pointee = bitcast $ptr to $ty*"
-//              buf += sh"${bind}call $ty %$pointee(${r(args, sep = ", ")})"
-//
-//          }
+
 
         case Op.Load(ty, ptr) =>
           val pointee = fresh()

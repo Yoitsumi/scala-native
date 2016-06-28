@@ -38,33 +38,21 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
     case x => Seq(x)
   }
 
+  // Return types seem to follow the same coertion scheme as arguments
+  def coerceReturn(ret: Type): Type = coerceArgument(ret) match {
+    case Seq(t) => t
+    case s => Type.Struct(Global.None, s)
+  }
 
-//  def coerceCall(op: Op.Call): (Seq[Inst], Op.Call) = {
-//    val Op.Call(Type.Function(_, retty), ptr, args) = op
-//    // A tuple for each original arg, containing seq of args that should be used to call
-//    // (in most cases just the original arg) and a seq of instructions that should be
-//    // inserted before the call, to compute this value (in most cases empty)
-//    val argChanges: Seq[(Seq[Val], Seq[Inst])] =
-//      for (arg <- args) yield {
-//        val coerced = coerceArgument(arg.ty)
-//        if(coerced.size == 1 && coerced.head == arg.ty) {
-//          (Seq(arg), Seq.empty) // No coercing required
-//        } else {
-//          val newArgs = coerced.map(t => Val.Local(fresh(), t))
-//          val coercety = Type.Struct(Global.None, coerced)
-//          val bitcastres = Val.Local(fresh(), coercety)
-//          val pointer = Val.Local(fresh(), Type.Ptr)
-//          val alloc = Inst()
-//          val bitcast = Inst(bitcastres.name, Op.Conv(Conv.Bitcast, coercety, arg))
-//          val extracts = for((res, i) <- newArgs.zipWithIndex) yield
-//            Inst(res.name, Op.Extract(bitcastres, Seq(i)))
-//          (newArgs, bitcast +: extracts)
-//        }
-//      }
-//    val coercedArgs = argChanges.flatMap(_._1)
-//    ( argChanges.flatMap(_._2) // All instructions to add before the call
-//    , Op.Call(Type.Function(coercedArgs.map(_.ty), retty), ptr, coercedArgs)) // The call instruction with modified args
-//  }
+  def  coerceFunctionType(t: Type): Type = {
+    val Type.Function(argtys, retty) = t
+    val ret = coerceReturn(retty)
+    val args = coerceArguments(argtys)
+    if(ret != retty && ret == Type.Ptr)
+      Type.Function(Type.Ptr +: args, ret)
+    else
+      Type.Function(args, ret)
+  }
 
   def coerceCall(inst: Inst): Seq[Show.Result] = {
 
@@ -109,10 +97,37 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
           (newArgs, preparationInsts ++ parameterInsertions)
         }
       }
-    val newArgs = argChanges.flatMap(_._1)
-    val funcType = Type.Function(newArgs.map(_.ty), retty)
 
-    val bind    = if (isVoid(inst.op.resty)) s() else sh"%${inst.name} = "
+    val coercedRetType = coerceReturn(retty)
+    val (retn: Option[Local], preRetInsts: Seq[Show.Result], postRetInsts: Seq[Show.Result], additionalArgs: Seq[Val]) =
+      if(coercedRetType == retty) {
+        (Some(inst.name), Seq(), Seq(), Seq())
+      } else if(coercedRetType == Type.Ptr) {
+        val alloc = fresh()
+        val bitcasted = fresh()
+        val pre = Seq(
+          sh"%$alloc = alloca $retty",
+          sh"%$bitcasted = bitcast $retty* %$alloc to i8*"
+        )
+        val post = sh"%${inst.name} = load $retty, $retty* %$alloc"
+        (None, pre, Seq(post), Seq(Val.Local(bitcasted, Type.Ptr)))
+      } else {
+        val alloc, bitcasted, ret = fresh()
+        val post = Seq(
+          sh"%$alloc = alloca $coercedRetType",
+          sh"store $coercedRetType %$ret, $coercedRetType* %$alloc",
+          sh"%$bitcasted = bitcast $coercedRetType* %$alloc to $retty*",
+          sh"%${inst.name} = load $retty, $retty* %$bitcasted"
+        )
+        (Some(ret), Seq(), post, Seq())
+      }
+
+
+
+    val newArgs = additionalArgs ++ argChanges.flatMap(_._1)
+    val funcType = Type.Function(newArgs.map(_.ty), coercedRetType)
+
+    val bind    = if (isVoid(retty) || retn.isEmpty) s() else sh"%${retn.get} = "
     val callInstructions = ptr match {
       case Val.Global(pointee, _) =>
         Seq(sh"${bind}call $funcType @$pointee(${r(newArgs, sep = ", ")})")
@@ -126,7 +141,7 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
         )
 
     }
-    argChanges.flatMap(_._2) ++ callInstructions
+    argChanges.flatMap(_._2) ++ preRetInsts ++ callInstructions ++ postRetInsts
   }
 
 }

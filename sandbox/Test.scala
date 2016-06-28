@@ -47,6 +47,9 @@ object dummy {
   def takei7(i: i7): Unit = extern
   def takei8(i: i8): Unit = extern
 
+  def makei3(i: Int): i3 = extern
+  def makei8(i: Int): i8 = extern
+
 }
 
 object Test {
@@ -59,6 +62,10 @@ object Test {
 //    takei5(new i5())
 //    takei6(new i6())
 //    takei7(new i7())
-    takei8(new i8())
+//    takei8(new i8())
+    val _i3 = makei3(10)
+    takei3(_i3)
+    val _i8 = makei8(20)
+    takei8(_i8)
   }
 }
