@@ -3,7 +3,7 @@ package util
 
 import scala.language.implicitConversions
 
-trait Show[T] { def apply(t: T): Show.Result }
+trait Show[-T] { def apply(t: T): Show.Result }
 object Show {
   sealed abstract class Result {
     override def toString = {
