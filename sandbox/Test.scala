@@ -1,4 +1,4 @@
-import scalanative.native._
+import scalanative.native._, stdlib._, stdio._
 
 @struct
 class i1(val _1: Int = 0)
@@ -63,9 +63,19 @@ object Test {
 //    takei6(new i6())
 //    takei7(new i7())
 //    takei8(new i8())
-    val _i3 = makei3(10)
-    takei3(_i3)
-    val _i8 = makei8(20)
-    takei8(_i8)
+//    val _i3 = makei3(10)
+//    takei3(_i3)
+//    val _i8 = makei8(20)
+//    takei8(_i8)
+    test(new i3(10, 20, 30))
+    test(new i8(10, 20, 30, 40, 50, 60, 70, 80))
+  }
+
+  def test(foo: i3): Unit = {
+    fprintf(stdout, c"i3: %d %d %d\n", foo._1, foo._2, foo._3)
+  }
+
+  def test(foo: i8): Unit = {
+    fprintf(stdout, c"i8: %d %d %d %d %d %d %d %d\n", foo._1, foo._2, foo._3, foo._4, foo._5, foo._6, foo._7, foo._8)
   }
 }

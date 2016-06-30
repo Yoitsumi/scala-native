@@ -77,10 +77,14 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
     val Type.Function(argtys, retty) = abi.coerceFunctionType(sig)
 
     val isDecl  = blocks.isEmpty
+
+    // lazy to avoid accessing blocks.head if isDecl is true
+    lazy val calleeCoerce = abi.coerceCallee(blocks.head.params)
+
     val keyword = if (isDecl) "declare" else "define"
     val params =
       if (isDecl) r(argtys, sep = ", ")
-      else r(blocks.head.params: Seq[Val], sep = ", ")
+      else r(calleeCoerce._1, sep = ", ")
     val postattrs: Seq[Attr] =
       if (attrs.inline != Attr.MayInline) Seq(attrs.inline) else Seq()
     val personality = if (attrs.isExtern || isDecl) s() else gxxpersonality
@@ -89,7 +93,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
       else {
         implicit val cfg = ControlFlow(blocks)
         val blockshows = cfg.map { node =>
-          showBlock(node.block, node.pred, isEntry = node eq cfg.entry)
+          showBlock(node.block, node.pred, r(calleeCoerce._2.map(nl)), isEntry = node eq cfg.entry)
         }
         s(" ", brace(i(r(blockshows))))
       }
@@ -99,7 +103,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
   private lazy val landingpad =
     sh"landingpad { i8*, i32 } catch i8* bitcast ({ i8*, i8*, i32, i8* }* @_ZTIPN11scalanative16ExceptionWrapperE to i8*)"
 
-  def showBlock(block: Block, pred: Seq[ControlFlow.Edge], isEntry: Boolean)(
+  def showBlock(block: Block, pred: Seq[ControlFlow.Edge], prependInstrs: Show.Result, isEntry: Boolean)(
       implicit cfg: ControlFlow.Graph): Show.Result = {
     val Block(name, params, insts, cf) = block
 
@@ -127,7 +131,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
         r(shows.map(nl(_)))
       }
 
-    sh"$label$prologue${nl("")}$body"
+    sh"$label$prependInstrs$prologue${nl("")}$body"
   }
 
   implicit val showType: Show[Type] = Show {

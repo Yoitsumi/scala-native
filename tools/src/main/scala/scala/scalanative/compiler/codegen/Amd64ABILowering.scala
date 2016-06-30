@@ -59,7 +59,7 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
     def isVoid(ty: Type): Boolean =
       ty == Type.Void || ty == Type.Unit || ty == Type.Nothing
 
-    val Op.Call(Type.Function(_, retty), ptr, args) = inst.op
+    val Op.Call(funty @ Type.Function(_, retty), ptr, args) = inst.op
     val argChanges: Seq[(Seq[Val], Seq[Show.Result])] =
       for (arg <- args) yield {
         val coerced = coerceArgument(arg.ty)
@@ -125,7 +125,9 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
 
 
     val newArgs = additionalArgs ++ argChanges.flatMap(_._1)
-    val funcType = Type.Function(newArgs.map(_.ty), coercedRetType)
+//    val funcType = Type.Function(newArgs.map(_.ty), coercedRetType)
+    val funcType = coerceFunctionType(funty)
+
 
     val bind    = if (isVoid(retty) || retn.isEmpty) s() else sh"%${retn.get} = "
     val callInstructions = ptr match {
@@ -142,6 +144,46 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
 
     }
     argChanges.flatMap(_._2) ++ preRetInsts ++ callInstructions ++ postRetInsts
+  }
+
+  def coerceCallee(args: Seq[Val.Local]): (Seq[Val], Seq[Show.Result]) = {
+    val argChanges: Seq[(Seq[Val.Local], Seq[Show.Result])] =
+      for(arg <- args) yield {
+        val coercedtys = coerceArgument(arg.ty)
+        if(coercedtys.size == 1 && coercedtys.head == arg.ty) {
+          (Seq(arg), Seq())
+        } else if(coercedtys.size == 1 && coercedtys.head == Type.Ptr) {
+          val bitcasted, param = fresh()
+          val insts = Seq(
+            sh"%$bitcasted = bitcast i8* %$param to ${arg.ty}*",
+            sh"%${arg.name} = load ${arg.ty}, ${arg.ty}* %$bitcasted"
+          )
+
+          (Seq(Val.Local(param, Type.Ptr)), insts)
+        } else {
+          val newArgs = coercedtys.map(t => Val.Local(fresh(), t))
+          val structty = Type.Struct(Global.None, coercedtys)
+          val allocated, bitcasted = fresh()
+          val preInsts = Seq(
+            sh"%$allocated = alloca $structty",
+            sh"%$bitcasted = bitcast $structty* %$allocated to ${arg.ty}*"
+          )
+          val memberInsts = newArgs.zipWithIndex.flatMap {
+            case (v @ Val.Local(_, ty), i) =>
+              val elemptr = fresh()
+              Seq(
+                sh"%$elemptr = getelementptr $structty, $structty* %$allocated, i32 0, i32 $i",
+                sh"store $v, $ty* %$elemptr"
+              )
+          }
+          val postInsts = Seq(
+            sh"%${arg.name} = load ${arg.ty}, ${arg.ty}* %$bitcasted"
+          )
+
+          (newArgs, preInsts ++ memberInsts ++ postInsts)
+        }
+      }
+    (argChanges.flatMap(_._1), argChanges.flatMap(_._2))
   }
 
 }
