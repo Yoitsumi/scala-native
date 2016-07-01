@@ -79,7 +79,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
     val isDecl  = blocks.isEmpty
 
     // lazy to avoid accessing blocks.head if isDecl is true
-    lazy val calleeCoerce = abi.coerceCallee(blocks.head.params)
+    lazy val calleeCoerce = abi.coerceCallee(blocks.head.params, sig.asInstanceOf[Type.Function].ret)
 
     val keyword = if (isDecl) "declare" else "define"
     val params =
@@ -287,8 +287,8 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
       "unreachable"
     case Cf.Ret(Val.None) =>
       sh"ret void"
-    case Cf.Ret(value) =>
-      sh"ret $value"
+    case cf: Cf.Ret =>
+      r(abi.coerceReturn(cf).map(nl))
     case Cf.Jump(next) =>
       sh"br $next"
     case Cf.If(cond, thenp, elsep) =>

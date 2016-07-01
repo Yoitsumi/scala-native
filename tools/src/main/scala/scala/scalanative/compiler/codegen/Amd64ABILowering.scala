@@ -14,6 +14,11 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
 
   val fresh = new Fresh("gen.abi")
 
+  // Don't use this name for anything else, than the parameter used for returning large structs.
+  // The code using it has to access it from two different places (start of the block and the ret instruction),
+  // so it can't use a fresh() identifier
+  val ReturnPtrParam = Local("gen.abi.ret", 0)
+
   def coerceArguments(args: Seq[Type]): Seq[Type] = args flatMap coerceArgument
 
   def coerceArgument(arg: Type): Seq[Type] = arg match {
@@ -27,6 +32,7 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
         case Type.Struct(_, e) => e.map(size).sum
       }
       size(struct) match {
+        case 0 => Seq() // Empty struct, ignore
         case s if s <= 8 => // One parameter
           Seq(Type.I(s * 8))
         case s if s <= 16 => // Two parameters
@@ -39,19 +45,36 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
   }
 
   // Return types seem to follow the same coertion scheme as arguments
-  def coerceReturn(ret: Type): Type = coerceArgument(ret) match {
+  // If this function returns a pointer, the actual return type should be void, and the returned struct should be
+  // written into space allocated by the caller
+  def coerceReturnType(ret: Type): Type = coerceArgument(ret) match {
     case Seq(t) => t
     case s => Type.Struct(Global.None, s)
   }
 
   def  coerceFunctionType(t: Type): Type = {
     val Type.Function(argtys, retty) = t
-    val ret = coerceReturn(retty)
+    val ret = coerceReturnType(retty)
     val args = coerceArguments(argtys)
     if(ret != retty && ret == Type.Ptr)
-      Type.Function(Type.Ptr +: args, ret)
+      Type.Function(Type.Ptr +: args, Type.Void)
     else
       Type.Function(args, ret)
+  }
+
+  def coerceReturn(ret: Cf.Ret): Seq[Show.Result] = {
+    val retval = ret.value
+    coerceReturnType(retval.ty) match {
+      case Type.Ptr if retval.ty != Type.Ptr =>
+        val bitcasted = fresh()
+        Seq(
+          sh"%$bitcasted = bitcast i8* %$ReturnPtrParam to ${retval.ty}*",
+          sh"store $retval, ${retval.ty}* %$bitcasted",
+          sh"ret void"
+        )
+      case _ =>
+        Seq(sh"ret $retval")
+    }
   }
 
   def coerceCall(inst: Inst): Seq[Show.Result] = {
@@ -98,7 +121,7 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
         }
       }
 
-    val coercedRetType = coerceReturn(retty)
+    val coercedRetType = coerceReturnType(retty)
     val (retn: Option[Local], preRetInsts: Seq[Show.Result], postRetInsts: Seq[Show.Result], additionalArgs: Seq[Val]) =
       if(coercedRetType == retty) {
         (Some(inst.name), Seq(), Seq(), Seq())
@@ -146,7 +169,7 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
     argChanges.flatMap(_._2) ++ preRetInsts ++ callInstructions ++ postRetInsts
   }
 
-  def coerceCallee(args: Seq[Val.Local]): (Seq[Val], Seq[Show.Result]) = {
+  def coerceCallee(args: Seq[Val.Local], retty: Type): (Seq[Val], Seq[Show.Result]) = {
     val argChanges: Seq[(Seq[Val.Local], Seq[Show.Result])] =
       for(arg <- args) yield {
         val coercedtys = coerceArgument(arg.ty)
@@ -183,7 +206,12 @@ class Amd64ABILowering(codegen: GenTextualLLVM) {
           (newArgs, preInsts ++ memberInsts ++ postInsts)
         }
       }
-    (argChanges.flatMap(_._1), argChanges.flatMap(_._2))
+    val coercedRetType = coerceReturnType(retty)
+    val additionalArgs =
+      if(coercedRetType == Type.Ptr && retty != Type.Ptr)
+        Seq(Val.Local(ReturnPtrParam, Type.Ptr))
+      else Seq()
+    (additionalArgs ++ argChanges.flatMap(_._1), argChanges.flatMap(_._2))
   }
 
 }
