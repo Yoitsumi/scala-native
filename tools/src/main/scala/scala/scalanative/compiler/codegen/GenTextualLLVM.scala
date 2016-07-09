@@ -93,7 +93,8 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
       else {
         implicit val cfg = ControlFlow(blocks)
         val blockshows = cfg.map { node =>
-          showBlock(node.block, node.pred, r(calleeCoerce._2.map(nl)), isEntry = node eq cfg.entry)
+          val isEntry = node eq cfg.entry
+          showBlock(node.block, node.pred, if(isEntry) r(calleeCoerce._2.map(nl)) else sh"", isEntry)
         }
         s(" ", brace(i(r(blockshows))))
       }
