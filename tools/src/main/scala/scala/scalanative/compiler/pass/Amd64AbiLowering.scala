@@ -7,7 +7,7 @@ import scala.scalanative.nir._
 /**
  * Created by Kamil on 09.07.2016.
  */
-class Amd64AbiLowering(implicit fresh: Fresh) extends Pass {
+class Amd64AbiLowering(implicit fresh: Fresh, top: analysis.ClassHierarchy.Top) extends Pass {
 
   sealed trait CoercionResult
   final case class Unchanged(ty: Type)  extends CoercionResult
@@ -70,7 +70,8 @@ class Amd64AbiLowering(implicit fresh: Fresh) extends Pass {
 
   override def preDefn: OnDefn = {
     case defn @ Defn
-          .Define(attrs, name, Type.Function(argtys, retty), blocks) =>
+          .Define(attrs, name, Type.Function(argtys, retty), blocks)
+      if attrs.isExtern =>
       val smallParamAllocNeeded = blocks.exists(_.insts.exists {
         case Inst(_, Op.Call(ty: Type.Function, _, _)) =>
           ty.args.exists(_.ty.isInstanceOf[Type.Struct])
@@ -115,7 +116,8 @@ class Amd64AbiLowering(implicit fresh: Fresh) extends Pass {
   }
 
   override def postDefn: OnDefn = {
-    case Defn.Declare(attrs, name, ty: Type.Function) =>
+    case Defn.Declare(attrs, name, ty: Type.Function)
+      if attrs.isExtern =>
       Seq(Defn.Declare(attrs, name, coerceFunctionType(ty)))
 
     case Defn
@@ -187,7 +189,8 @@ class Amd64AbiLowering(implicit fresh: Fresh) extends Pass {
   }
 
   override def postInst: OnInst = {
-    case Inst(res, Op.Call(functy: Type.Function, ptr, args)) =>
+    case Inst(res, Op.Call(functy: Type.Function, ptr, args))
+      if top.methods =>
       var bigParamIndex = 0
       val argCoertions: Seq[(Seq[Val], Seq[Inst])] = for (arg <- args)
         yield
@@ -273,6 +276,6 @@ class Amd64AbiLowering(implicit fresh: Fresh) extends Pass {
 
 object Amd64AbiLowering extends PassCompanion {
 
-  override def apply(ctx: Ctx): Pass = new Amd64AbiLowering()(ctx.fresh)
+  override def apply(ctx: Ctx): Pass = new Amd64AbiLowering()(ctx.fresh, ctx.top)
 
 }
