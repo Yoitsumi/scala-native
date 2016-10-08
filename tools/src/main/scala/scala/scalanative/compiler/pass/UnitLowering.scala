@@ -20,7 +20,7 @@ class UnitLowering(implicit fresh: Fresh) extends Pass {
   }
 
   override def preDefn = {
-    case defn @ Defn.Define(_, _, Type.Function(_, retty), blocks) =>
+    case defn @ Defn.Define(_, _, Type.Function(_, retty, _), blocks) =>
       defnRetty = retty
       Seq(defn)
   }
@@ -37,8 +37,8 @@ class UnitLowering(implicit fresh: Fresh) extends Pass {
     case Type.Unit =>
       Type.Ptr
 
-    case Type.Function(params, Type.Unit) =>
-      Type.Function(params, Type.Void)
+    case Type.Function(params, Type.Unit, cc) =>
+      Type.Function(params, Type.Void, cc)
   }
 }
 

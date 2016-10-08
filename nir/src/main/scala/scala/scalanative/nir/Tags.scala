@@ -207,4 +207,11 @@ object Tags {
   final val Byval = PassConv + 1
   final val Sret  = Byval + 1
 
+  // Function Call Conventions
+
+  final val CallConv = PassConv + 32
+
+  final val ScalaCC = 1 + CallConv
+  final val CCC = 1 + ScalaCC
+
 }

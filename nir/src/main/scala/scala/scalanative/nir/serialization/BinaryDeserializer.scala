@@ -259,7 +259,7 @@ final class BinaryDeserializer(_buffer: => ByteBuffer) {
     case T.F32Type      => Type.F32
     case T.F64Type      => Type.F64
     case T.ArrayType    => Type.Array(getType, getInt)
-    case T.FunctionType => Type.Function(getArgs, getType)
+    case T.FunctionType => Type.Function(getArgs, getType, getCallConv)
     case T.StructType   => Type.Struct(getGlobal, getTypes)
 
     case T.UnitType    => Type.Unit
@@ -274,6 +274,11 @@ final class BinaryDeserializer(_buffer: => ByteBuffer) {
   private def getPassConvention(): PassConv = getInt match {
     case T.Byval => PassConv.Byval(getType)
     case T.Sret  => PassConv.Sret(getType)
+  }
+
+  private def getCallConv(): CallConv = getInt match {
+    case T.ScalaCC => CallConv.ScalaCC
+    case T.CCC => CallConv.CCC
   }
 
   private def getVals(): Seq[Val] = getSeq(getVal)

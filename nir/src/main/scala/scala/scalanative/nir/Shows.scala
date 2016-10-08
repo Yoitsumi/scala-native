@@ -269,7 +269,7 @@ object Shows {
     case Type.F32                      => "f32"
     case Type.F64                      => "f64"
     case Type.Array(ty, n)             => sh"[$ty x $n]"
-    case Type.Function(args, ret)      => sh"(${r(args, sep = ", ")}) => $ret"
+    case Type.Function(args, ret, cc)      => sh"$cc (${r(args, sep = ", ")}) => $ret"
     case Type.Struct(Global.None, tys) => sh"{${r(tys, sep = ", ")}}"
     case Type.Struct(name, _)          => sh"struct $name"
 
@@ -288,6 +288,11 @@ object Shows {
   implicit val showPassConvention: Show[PassConv] = Show {
     case PassConv.Byval(ty) => sh"byval[$ty]"
     case PassConv.Sret(ty)  => sh"sret[$ty]"
+  }
+
+  implicit val showCallConv: Show[CallConv] = Show {
+    case CallConv.ScalaCC => "scalacc"
+    case CallConv.CCC => "ccc"
   }
 
   implicit val showGlobal: Show[Global] = Show {

@@ -34,8 +34,8 @@ class NothingLowering extends Pass {
     case Type.Nothing =>
       unsupported(
           "nothing can only be used as the result type of the function")
-    case Type.Function(params, Type.Nothing) =>
-      Type.Function(params, Type.Void)
+    case Type.Function(params, Type.Nothing, cc) =>
+      Type.Function(params, Type.Void, cc)
   }
 }
 

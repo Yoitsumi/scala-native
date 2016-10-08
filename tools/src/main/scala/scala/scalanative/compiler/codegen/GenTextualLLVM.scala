@@ -81,7 +81,8 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
                        name: Global,
                        sig: Type,
                        blocks: Seq[Block]) = {
-    val Type.Function(argtys, retty) = sig
+    // TODO map nir call convention to llvm (for now both should use the default one, find out what it is and make it easy to change it later)
+    val Type.Function(argtys, retty, cc) = sig
 
     val isDecl  = blocks.isEmpty
     val keyword = if (isDecl) "declare" else "define"
@@ -202,7 +203,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
     case Type.F32                      => "float"
     case Type.F64                      => "double"
     case Type.Array(ty, n)             => sh"[$n x $ty]"
-    case Type.Function(args, ret)      => sh"$ret (${r(args, sep = ", ")})"
+    case Type.Function(args, ret, _)   => sh"$ret (${r(args, sep = ", ")})"
     case Type.Struct(Global.None, tys) => sh"{ ${r(tys, sep = ", ")} }"
     case Type.Struct(name, _)          => sh"%$name"
     case ty                            => unsupported(ty)
@@ -295,7 +296,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
         case Op.Call(ty, Val.Global(pointee, _), args) =>
           val bind = if (isVoid(op.resty)) s() else sh"%$name = "
 
-          val Type.Function(argtys, _) = ty
+          val Type.Function(argtys, _, _) = ty
 
           val (preinsts, argshows) = showCallArgs(argtys, args)
 
@@ -306,7 +307,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
           val pointee = fresh()
           val bind    = if (isVoid(op.resty)) s() else sh"%$name = "
 
-          val Type.Function(argtys, _) = ty
+          val Type.Function(argtys, _, _) = ty
 
           val (preinsts, argshows) = showCallArgs(argtys, args)
 
@@ -350,7 +351,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
 
     cf match {
       case Cf.Invoke(ty, Val.Global(pointee, _), args, succ, fail) =>
-        val Type.Function(_, resty) = ty
+        val Type.Function(_, resty, _) = ty
 
         val name = cfg.nodes(succ.name).block.params.headOption.map(_.name)
         val bind = name.fold(sh"") { name =>
@@ -361,7 +362,7 @@ class GenTextualLLVM(assembly: Seq[Defn]) extends GenShow(assembly) {
         sh"${bind}invoke $ty @$pointee(${r(args, sep = ", ")}) to $succ unwind $fail"
 
       case Cf.Invoke(ty, ptr, args, succ, fail) =>
-        val Type.Function(_, resty) = ty
+        val Type.Function(_, resty, _) = ty
 
         val name = cfg.nodes(succ.name).block.params.headOption.map(_.name)
         val bind = name.fold(sh"") { name =>

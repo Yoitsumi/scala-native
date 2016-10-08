@@ -375,8 +375,8 @@ final class BinarySerializer(buffer: ByteBuffer) {
     case Type.F32          => putInt(T.F32Type)
     case Type.F64          => putInt(T.F64Type)
     case Type.Array(ty, n) => putInt(T.ArrayType); putType(ty); putInt(n)
-    case Type.Function(args, ret) =>
-      putInt(T.FunctionType); putArgs(args); putType(ret)
+    case Type.Function(args, ret, cc) =>
+      putInt(T.FunctionType); putArgs(args); putType(ret); putCallConv(cc)
     case Type.Struct(n, tys) =>
       putInt(T.StructType); putGlobal(n); putTypes(tys)
 
@@ -395,6 +395,11 @@ final class BinarySerializer(buffer: ByteBuffer) {
   private def putPassConvention(attr: PassConv): Unit = attr match {
     case PassConv.Byval(ty) => putInt(T.Byval); putType(ty)
     case PassConv.Sret(ty)  => putInt(T.Sret); putType(ty)
+  }
+
+  private def putCallConv(cc: CallConv): Unit = cc match {
+    case CallConv.ScalaCC => putInt(T.ScalaCC)
+    case CallConv.CCC => putInt(T.CCC)
   }
 
   private def putVals(values: Seq[Val]): Unit = putSeq(values)(putVal)

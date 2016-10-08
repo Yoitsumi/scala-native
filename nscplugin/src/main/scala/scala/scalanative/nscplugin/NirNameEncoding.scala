@@ -80,7 +80,7 @@ trait NirNameEncoding { self: NirCodeGen =>
       case nir.Type.F32          => "f32"
       case nir.Type.F64          => "f64"
       case nir.Type.Array(ty, n) => sh"arr.$ty.$n"
-      case nir.Type.Function(args, ret) =>
+      case nir.Type.Function(args, ret, _) =>
         sh"fun.${r(args.map(_.ty) :+ ret, sep = ".")}"
       case nir.Type.Struct(name, _) => sh"struct.$name"
 
